@@ -9,6 +9,7 @@ import org.ayfaar.app.dao.TermDao;
 import org.ayfaar.app.model.Link;
 import org.ayfaar.app.model.Term;
 import org.ayfaar.app.model.TermMorph;
+import org.dozer.util.DozerConstants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -162,6 +163,21 @@ public class TermsMapImpl implements TermsMap {
     @Override
     public TermProvider getTermProvider(String name) {
         return aliasesMap.get(name.toLowerCase());
+    }
+
+    @Override
+    public Set<TermProvider> getTermProviderByPattern(String name) {
+
+        Pattern pattern = Pattern.compile("^" + name.toLowerCase().replace("*", "") + "[A-zА-яЁё]*");
+        Set<TermProvider> termProviders = new HashSet<TermProvider>();
+
+        for (Map.Entry<String, TermProvider> entry : aliasesMap.entrySet()) {
+            Matcher matcher = pattern.matcher(entry.getKey());
+            if (matcher.matches()) termProviders.add(entry.getValue());
+        }
+
+        return termProviders;
+
     }
 
     @Override

@@ -4,6 +4,7 @@ import org.ayfaar.app.model.Term;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Интерфейс взаимодействия с предварительно загруженными всеми терминами
@@ -17,6 +18,9 @@ public interface TermsMap {
     public TermProvider getTermProvider(String name);
     public Term getTerm(String name);
     public void reload();
+
+    public Set<TermProvider> getTermProviderByPattern(String name);
+
 
     public interface TermProvider {
         public String getName();

@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.inject.Inject;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static java.lang.String.format;
 import static java.util.Collections.sort;
@@ -50,6 +52,14 @@ public class TermController {
     @RequestMapping(value = "/", method = RequestMethod.GET)
     @Model
     public ModelMap get(@RequestParam("name") String termName, @RequestParam(required = false) boolean mark) {
+
+        if (termName != null) {
+            Pattern asteriskPattern = Pattern.compile("[A-zА-яЁё]+\\*$");
+            Matcher matcher = asteriskPattern.matcher(termName);
+            if (matcher.matches()) return getByPattern(termName, mark);
+        }
+
+
         TermsMap.TermProvider provider = termsMap.getTermProvider(termName);
         if (provider == null) {
             throw new QuietException(format("Термин `%s` отсутствует", termName));
@@ -145,6 +155,108 @@ public class TermController {
             }
         });
     }
+
+
+//    @RequestMapping(value = "/{name:[A-zА-яЁё]+\\*$}", method = RequestMethod.GET)
+//    @Model
+//    public ModelMap getByPattern(@PathVariable("name") String termName, @RequestParam(required = false) boolean mark) {
+      private ModelMap getByPattern(String termName, boolean mark) {
+
+          Set<TermsMap.TermProvider> providers = termsMap.getTermProviderByPattern(termName);
+
+          if (providers.size() == 0) {
+              throw new QuietException(format("Термин `%s` отсутствует", termName));
+          }
+
+          ModelMap modelMap = new ModelMap();//(ModelMap) getModelMap(term);
+          modelMap.put("name", termName);
+
+          List<ModelMap> quotes = new ArrayList<ModelMap>();
+          Set<UID> related = new LinkedHashSet<UID>();
+          Set<UID> aliases = new LinkedHashSet<UID>();
+
+          for (TermsMap.TermProvider provider : providers) {
+
+              Term term = provider.getTerm();
+/*
+
+          modelMap.put("uri", term.getUri());
+          modelMap.put("name", term.getName());
+          if (mark) {
+              modelMap.put("shortDescription", term.getTaggedShortDescription());
+              modelMap.put("description", term.getTaggedDescription());
+          } else {
+              modelMap.put("shortDescription", term.getShortDescription());
+              modelMap.put("description", term.getDescription());
+          }
+
+          // LINKS
+
+          List<ModelMap> quotes = new ArrayList<ModelMap>();
+          Set<UID> related = new LinkedHashSet<UID>();
+          Set<UID> aliases = new LinkedHashSet<UID>();
+*/
+
+              UID code = null;
+              List<Link> links = linkDao.getAllLinks(term.getUri());
+              for (Link link : links) {
+                  UID source = link.getUid1().getUri().equals(term.getUri())
+                          ? link.getUid2()
+                          : link.getUid1();
+                  if (link.getQuote() != null || source instanceof Item) {
+                      quotes.add(getQuote(link, source, mark));
+                  } else if (ABBREVIATION.equals(link.getType()) || ALIAS.equals(link.getType())) {
+                      aliases.add(source);
+                  } else if (CODE.equals(link.getType())) {
+                      code = source;
+                  } else {
+                      related.add(source);
+                  }
+              }
+
+              // Нужно также включить цитаты всех синонимов и сокращений и кода
+              Set<UID> aliasesQuoteSources = new HashSet<UID>(aliases);
+              if (code != null) {
+                  aliasesQuoteSources.add(code);
+              }
+              for (UID uid : aliasesQuoteSources) {
+                  List<Link> aliasLinksWithQuote = linkDao.getAllLinks(uid.getUri());
+                  for (Link link : aliasLinksWithQuote) {
+                      UID source = link.getUid1().getUri().equals(uid.getUri())
+                              ? link.getUid2()
+                              : link.getUid1();
+                      if (link.getQuote() != null || source instanceof Item) {
+                          quotes.add(getQuote(link, source, mark));
+                      } else if (ABBREVIATION.equals(link.getType()) || ALIAS.equals(link.getType()) || CODE.equals(link.getType())) {
+                          // Синонимы синонимов :) по идее их не должно быть, но если вдруг...
+                          // как минимум один есть и этот наш основной термин
+                          if (!source.getUri().equals(term.getUri())) {
+                              aliases.add(source);
+                          }
+                      } else {
+                          related.add(source);
+                      }
+                  }
+              }
+
+          }
+
+          sort(quotes, new Comparator<ModelMap>() {
+              @Override
+              public int compare(ModelMap o1, ModelMap o2) {
+                  return ((String) o1.get("uri")).compareTo((String) o2.get("uri"));
+              }
+          });
+
+          modelMap.put("code", null);
+          modelMap.put("quotes", quotes);
+          modelMap.put("related", toPlainObjectWithoutContent(related));
+          modelMap.put("aliases", toPlainObjectWithoutContent(aliases));
+
+          return modelMap;
+
+    }
+
 
     private ModelMap getQuote(Link link, UID source, boolean mark) {
         ModelMap map = new ModelMap();
